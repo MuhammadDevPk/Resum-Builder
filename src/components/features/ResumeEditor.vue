@@ -241,7 +241,7 @@
               </div>
             </div>
 
-            <div class="form-grid-2">
+            <div class="form-grid-3">
               <BaseInput
                 label="Project Name"
                 placeholder="Voxle Voice Agent Builder"
@@ -253,6 +253,12 @@
                 placeholder="Vue.js 3, FastAPI, WebRTC, OpenAI API"
                 :modelValue="proj.technologies"
                 @update:modelValue="updateProject(projIdx, { technologies: $event })"
+              />
+              <BaseInput
+                label="Duration / Dates"
+                placeholder="e.g. 11/2025 - Present"
+                :modelValue="proj.duration"
+                @update:modelValue="updateProject(projIdx, { duration: $event })"
               />
             </div>
             <div class="mt-4">
@@ -362,7 +368,7 @@
               <BaseInput
                 label="Skills (Comma-separated)"
                 placeholder="e.g. PHP, Python, JavaScript, Node.js"
-                :modelValue="skill.values.join(', ')"
+                :modelValue="Array.isArray(skill.values) ? skill.values.join(', ') : ''"
                 @update:modelValue="updateSkillValues(skillIdx, $event)"
               />
             </div>

@@ -79,7 +79,7 @@
                 &nbsp;|&nbsp; <em>{{ proj.technologies }}</em>
               </span>
             </span>
-            <span class="item-duration">{{ proj.duration || 'Duration' }}</span>
+            <span class="item-duration">{{ proj.duration || '' }}</span>
           </div>
           <div v-if="proj.description" class="item-subheader-row">
             <span class="project-desc">{{ proj.description }}</span>
@@ -103,7 +103,7 @@
             class="skills-row"
           >
             <span class="skills-category">{{ skill.category }}:</span>
-            <span class="skills-values">{{ skill.values.join(', ') }}</span>
+            <span class="skills-values">{{ Array.isArray(skill.values) ? skill.values.join(', ') : '' }}</span>
           </div>
         </div>
       </section>

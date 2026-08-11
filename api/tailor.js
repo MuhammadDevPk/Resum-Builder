@@ -100,13 +100,14 @@ export default async function handler(req, res) {
                     type: 'ARRAY',
                     items: { type: 'STRING' }
                   },
+                  duration: { type: 'STRING' },
                   description: { type: 'STRING' },
                   bullets: {
                     type: 'ARRAY',
                     items: { type: 'STRING' }
                   }
                 },
-                required: ['name', 'technologies', 'bullets']
+                required: ['name', 'technologies', 'duration', 'bullets']
               }
             },
             education: {

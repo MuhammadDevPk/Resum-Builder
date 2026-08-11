@@ -96,27 +96,35 @@ const setTailoredResume = (data) => {
   state.tailoredResume.summary = data.summary || ''
 
   if (Array.isArray(data.skills)) {
-    // Check if the array contains structured category objects: [{ category, values }]
-    const isStructured = data.skills.length > 0 && 
-                         typeof data.skills[0] === 'object' && 
+    const isStructured = data.skills.length > 0 &&
+                         typeof data.skills[0] === 'object' &&
                          data.skills[0] !== null &&
-                         'category' in data.skills[0];
-                         
+                         'category' in data.skills[0]
+
     if (isStructured) {
+      // Each item is { category: string, values: string[] }
+      // Defensively coerce every value to a plain string to prevent [object Object]
       state.tailoredResume.skills = data.skills.map(s => ({
-        category: s.category || '',
-        values: Array.isArray(s.values) ? s.values : []
-      }));
+        category: typeof s.category === 'string' ? s.category : String(s.category || ''),
+        values: Array.isArray(s.values)
+          ? s.values.map(v => (typeof v === 'string' ? v : (typeof v === 'object' && v !== null ? (v.name || v.value || v.label || JSON.stringify(v)) : String(v))))
+          : []
+      }))
     } else {
-      state.tailoredResume.skills = [
-        { category: 'Skills', values: data.skills }
-      ];
+      // Flat string array — wrap under a single 'Skills' category
+      state.tailoredResume.skills = [{
+        category: 'Skills',
+        values: data.skills.map(v => (typeof v === 'string' ? v : String(v)))
+      }]
     }
   } else if (typeof data.skills === 'object' && data.skills !== null) {
+    // Object map: { Languages: ['PHP', 'JS'], ... }
     state.tailoredResume.skills = Object.entries(data.skills).map(([category, values]) => ({
       category,
-      values: Array.isArray(values) ? values : [values]
-    }));
+      values: Array.isArray(values)
+        ? values.map(v => (typeof v === 'string' ? v : String(v)))
+        : [String(values)]
+    }))
   } else {
     state.tailoredResume.skills = []
   }
@@ -131,6 +139,7 @@ const setTailoredResume = (data) => {
   state.tailoredResume.projects = (data.projects || []).map(proj => ({
     name: proj.name || '',
     technologies: Array.isArray(proj.technologies) ? proj.technologies.join(', ') : (proj.technologies || ''),
+    duration: proj.duration || '',
     description: proj.description || '',
     bullets: Array.isArray(proj.bullets) ? proj.bullets : []
   }))
@@ -185,6 +194,7 @@ const addProjectItem = () => {
   state.tailoredResume.projects.push({
     name: '',
     technologies: '',
+    duration: '',
     description: '',
     bullets: ['']
   })
@@ -273,8 +283,13 @@ const loadFromLocalStorage = () => {
       if (parsed.rawResumeText) state.rawResumeText = parsed.rawResumeText
       if (parsed.jobDescription) state.jobDescription = parsed.jobDescription
       if (parsed.customInstructions) state.customInstructions = parsed.customInstructions
+
+      // ── CRITICAL FIX: route cached tailoredResume through setTailoredResume ──
+      // A direct shallow merge (spread) bypasses all sanitization logic and
+      // can restore corrupted/stale objects (e.g. skills with [object Object])
+      // from older localStorage snapshots. Always sanitize on restore.
       if (parsed.tailoredResume) {
-        state.tailoredResume = { ...state.tailoredResume, ...parsed.tailoredResume }
+        setTailoredResume(parsed.tailoredResume)
       }
     }
   } catch (e) {
