@@ -224,6 +224,26 @@ const removeEducationItem = (index) => {
   saveToLocalStorage()
 }
 
+const setExperienceList = (list) => {
+  state.tailoredResume.experience = list
+  saveToLocalStorage()
+}
+
+const setProjectsList = (list) => {
+  state.tailoredResume.projects = list
+  saveToLocalStorage()
+}
+
+const setSkillsList = (list) => {
+  state.tailoredResume.skills = list
+  saveToLocalStorage()
+}
+
+const setEducationList = (list) => {
+  state.tailoredResume.education = list
+  saveToLocalStorage()
+}
+
 const resetStore = () => {
   const defaults = defaultState()
   Object.keys(defaults).forEach(key => {
@@ -275,6 +295,10 @@ export const useResumeStore = () => {
     updateEducation,
     addEducationItem,
     removeEducationItem,
+    setExperienceList,
+    setProjectsList,
+    setSkillsList,
+    setEducationList,
     resetStore,
     loadFromLocalStorage
   }
