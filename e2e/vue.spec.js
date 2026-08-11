@@ -1,8 +1,14 @@
 import { test, expect } from '@playwright/test'
 
-// See here how to get started:
-// https://playwright.dev/docs/intro
-test('visits the app root url', async ({ page }) => {
+test('visits the app root and checks for importer UI', async ({ page }) => {
   await page.goto('/')
-  await expect(page.locator('h1')).toHaveText('You did it!')
+  
+  // Check main title
+  await expect(page.locator('h2')).toHaveText('Tailor Your Resume')
+  
+  // Check drop zone presence
+  await expect(page.locator('.upload-title')).toHaveText('Drag & Drop your PDF resume here')
+  
+  // Check Job Description label
+  await expect(page.locator('label:has-text("Target Job Description")')).toBeVisible()
 })
