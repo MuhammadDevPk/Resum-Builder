@@ -16,6 +16,53 @@
 
     <!-- Tab Panels -->
     <div class="tab-panel">
+      <!-- 0. AI ASSISTANT -->
+      <div v-if="activeTab === 'ai_refine'" class="panel-content">
+        <div class="ai-refine-header">
+          <Sparkles class="ai-header-icon" />
+          <div>
+            <h3>AI Resume Assistant</h3>
+            <p class="panel-subtitle">Instruct the AI to rewrite, format, translate, or refine sections of your tailored resume.</p>
+          </div>
+        </div>
+
+        <div class="ai-refine-body">
+          <div class="ai-prompt-card glass-panel">
+            <BaseTextarea
+              v-model="aiPrompt"
+              placeholder="e.g. Under Codebrisk experience, restructure the bullets to group them by sub-projects: Shad, Aroundairport, Iad, HaulersRoute, and WordPress Plugin, keeping their detailed nested points."
+              rows="5"
+              :disabled="isRefining"
+            />
+            <div class="ai-prompt-footer">
+              <span v-if="refineError" class="refine-error">{{ refineError }}</span>
+              <BaseButton
+                :loading="isRefining"
+                :icon="Sparkles"
+                @click="applyAiRefinement"
+              >
+                Refine Resume
+              </BaseButton>
+            </div>
+          </div>
+
+          <div class="suggestions-box">
+            <h4>💡 Popular Suggestions</h4>
+            <div class="suggestions-list">
+              <button
+                v-for="sug in suggestions"
+                :key="sug"
+                class="suggestion-pill"
+                :disabled="isRefining"
+                @click="useSuggestion(sug)"
+              >
+                {{ sug }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 1. PERSONAL INFORMATION -->
       <div v-if="activeTab === 'personal'" class="panel-content">
         <h3>Contact & Profile Information</h3>
@@ -468,7 +515,8 @@ import {
   Plus,
   Trash2,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Sparkles
 } from '@lucide/vue'
 import BaseInput from '@/components/common/BaseInput.vue'
 import BaseTextarea from '@/components/common/BaseTextarea.vue'
@@ -494,12 +542,14 @@ const {
   updateEducation,
   addEducationItem,
   removeEducationItem,
-  setEducationList
+  setEducationList,
+  setTailoredResume
 } = useResumeStore()
 
 const activeTab = ref('personal')
 
 const tabs = [
+  { id: 'ai_refine', name: 'AI Assistant', icon: Sparkles },
   { id: 'personal', name: 'Profile info', icon: User },
   { id: 'summary', name: 'Summary', icon: FileText },
   { id: 'experience', name: 'Experience', icon: Briefcase },
@@ -507,6 +557,57 @@ const tabs = [
   { id: 'skills', name: 'Skills', icon: Award },
   { id: 'education', name: 'Education', icon: GraduationCap }
 ]
+
+// AI Assistant States and Actions
+const aiPrompt = ref('')
+const isRefining = ref(false)
+const refineError = ref(null)
+
+const suggestions = [
+  "Group Codebrisk projects by sub-project",
+  "Make professional summary more metric-driven",
+  "Make bullet points shorter and punchier",
+  "Improve spelling and grammar overall",
+  "Add metrics and percentages to work achievements",
+  "Make the overall tone more senior and technical"
+]
+
+const useSuggestion = (sug) => {
+  aiPrompt.value = sug
+}
+
+const applyAiRefinement = async () => {
+  if (!aiPrompt.value.trim()) return
+  isRefining.value = true
+  refineError.value = null
+  
+  try {
+    const response = await fetch('/api/refine', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        tailoredResume: JSON.parse(JSON.stringify(state.tailoredResume)),
+        prompt: aiPrompt.value
+      })
+    })
+
+    if (!response.ok) {
+      const err = await response.json()
+      throw new Error(err.error || 'Failed to refine resume using AI')
+    }
+
+    const updatedData = await response.json()
+    setTailoredResume(updatedData)
+    aiPrompt.value = ''
+  } catch (err) {
+    console.error('Refinement error:', err)
+    refineError.value = err.message
+  } finally {
+    isRefining.value = false
+  }
+}
 
 // Array Re-ordering Swapper Action
 const moveItem = (listName, index, direction) => {
@@ -852,5 +953,98 @@ h5 {
 
 .mt-4 {
   margin-top: 16px;
+}
+
+/* AI Assistant Premium Styling */
+.ai-refine-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.ai-header-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--accent-color);
+  animation: pulse 2s infinite ease-in-out;
+}
+
+.ai-refine-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.ai-prompt-card {
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.ai-prompt-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.refine-error {
+  color: var(--danger-color);
+  font-size: 13px;
+  font-weight: 500;
+  margin-right: auto;
+}
+
+.suggestions-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.suggestions-box h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.suggestions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.suggestion-pill {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.suggestion-pill:hover:not(:disabled) {
+  background: var(--accent-color);
+  color: #ffffff;
+  border-color: var(--accent-color);
+  transform: translateY(-1px);
+}
+
+.suggestion-pill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
 }
 </style>

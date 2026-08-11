@@ -56,9 +56,7 @@
             <span class="role-title">{{ exp.role || 'Role Title' }}</span>
           </div>
           <ul v-if="exp.bullets && exp.bullets.length > 0" class="bullets-list">
-            <li v-for="(bullet, bIdx) in exp.bullets" :key="bIdx" class="bullet-item">
-              {{ bullet }}
-            </li>
+            <li v-for="(bullet, bIdx) in exp.bullets" :key="bIdx" class="bullet-item" v-html="renderBullet(bullet)"></li>
           </ul>
         </div>
       </section>
@@ -85,9 +83,7 @@
             <span class="project-desc">{{ proj.description }}</span>
           </div>
           <ul v-if="proj.bullets && proj.bullets.length > 0" class="bullets-list">
-            <li v-for="(bullet, bIdx) in proj.bullets" :key="bIdx" class="bullet-item">
-              {{ bullet }}
-            </li>
+            <li v-for="(bullet, bIdx) in proj.bullets" :key="bIdx" class="bullet-item" v-html="renderBullet(bullet)"></li>
           </ul>
         </div>
       </section>
@@ -152,6 +148,56 @@ const formatUrl = (url) => {
   if (!url) return ''
   if (/^https?:\/\//i.test(url)) return url
   return `https://${url}`
+}
+
+const renderBullet = (text) => {
+  if (!text) return ''
+  
+  // Escape HTML characters to prevent security issues (XSS)
+  let html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+
+  // Parse markdown bold: **text** -> <strong>text</strong>
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+
+  // Parse markdown italic: *text* -> <em>text</em>
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>')
+
+  // Handle nested lists if there are line breaks with bullet points
+  if (html.includes('\n')) {
+    const lines = html.split('\n')
+    let output = ''
+    let inList = false
+
+    lines.forEach(line => {
+      // Match indentation optionally followed by list indicator (e.g. - or * or • or number.)
+      const match = line.match(/^(\s*)([-*+•]|\d+\.)\s+(.*)$/)
+      if (match) {
+        if (!inList) {
+          output += '<ul class="nested-bullet-list">'
+          inList = true
+        }
+        output += `<li class="nested-bullet-item">${match[3]}</li>`
+      } else {
+        if (inList) {
+          output += '</ul>'
+          inList = false
+        }
+        output += (output ? '<br>' : '') + line
+      }
+    })
+
+    if (inList) {
+      output += '</ul>'
+    }
+    return output
+  }
+
+  return html
 }
 </script>
 
@@ -335,6 +381,21 @@ const formatUrl = (url) => {
 
 .skills-values {
   color: #1f2937;
+}
+
+.nested-bullet-list {
+  margin-top: 4px;
+  margin-bottom: 4px;
+  padding-left: 15px;
+  list-style-type: circle;
+}
+
+.nested-bullet-item {
+  font-size: 9px;
+  color: #374151;
+  margin-bottom: 2px;
+  line-height: 1.35;
+  text-align: left;
 }
 
 /* Print Override styling */

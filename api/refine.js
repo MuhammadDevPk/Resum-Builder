@@ -1,38 +1,22 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export default async function handler(req, res) {
-  // Enable CORS/headers for serverless context
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed. Use POST.' });
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({
-      error: 'API Configuration Error',
-      details: 'GEMINI_API_KEY is not defined on the server. Please add it to your environment variables.'
-    });
+    return res.status(500).json({ error: 'GEMINI_API_KEY environment variable is not configured on the server.' });
   }
 
-  const { resumeText, jobDescription, customInstructions } = req.body;
+  const { tailoredResume, prompt } = req.body;
 
-  if (!resumeText) {
-    return res.status(400).json({ error: 'Missing required field: resumeText' });
+  if (!tailoredResume) {
+    return res.status(400).json({ error: 'Missing required field: tailoredResume' });
   }
-  if (!jobDescription) {
-    return res.status(400).json({ error: 'Missing required field: jobDescription' });
+  if (!prompt) {
+    return res.status(400).json({ error: 'Missing required field: prompt' });
   }
 
   try {
@@ -128,36 +112,29 @@ export default async function handler(req, res) {
       }
     });
 
-    const systemPrompt = `You are a seasoned Resume Writer and Technical Recruiter.
-Your objective is to tailor the candidate's existing resume to fit a target job description.
+    const systemPrompt = `You are a seasoned Resume Editor and Technical Recruiter.
+Your objective is to modify the candidate's existing tailored resume JSON structure according to the user's specific editing instructions.
+
+CURRENT TAILORED RESUME JSON:
+${JSON.stringify(tailoredResume, null, 2)}
+
+USER EDITING INSTRUCTION:
+"${prompt}"
 
 CRITICAL RULES:
-1. NO HALLUCINATIONS: Do NOT invent, assume, or add any work experiences, roles, projects, certifications, degrees, programming languages, or specific tools that are not present in the original resume. If they do not have it, do not include it.
-2. ALIGN & HIGHLIGHT: Identify key matches between the candidate's background and the target job description. Rephrase achievements, bullets, and summaries to emphasize these matching elements using strong action verbs.
-3. PROFESSIONAL SUMMARY: Rewrite the summary to directly address the candidate's relevance to the target job description, drawing strictly from their actual experience.
-4. WORK EXPERIENCE BULLETS: Rephrase the bullet points under experience. Emphasize the impact, tools, scale, and results relevant to the job description. Keep the metrics and achievements factual to the original.
-5. SKILLS GROUPING: Organize their actual skills into clear, relevant categories (e.g., Languages, Frameworks, Cloud, databases) matching the job posting keywords, but only including skills they actually possess.
-6. PROJECTS: Highlight matching projects and emphasize the specific technologies used that align with the job requirements.
-7. EDUCATION: Keep school details, degrees, and dates accurate.
+1. STRICT SCHEMATIC INTEGRITY: Output ONLY the updated resume data, strictly conforming to the specified JSON schema. Do not change the JSON structure or keys.
+2. PRESERVE UNTOUCHED CONTENT: Keep all sections, bullets, and details that are not affected by the user's instruction exactly as they were in the original JSON.
+3. FOLLOW INSTRUCTIONS PRECISELY: Apply the user's edits accurately. For example, if the user asks to restructure or format certain bullets (like grouping projects under experience), update those bullets accordingly. If they ask to add/remove a skill, rewrite a summary, or rephrase a bullet, apply it precisely.
+4. NO HALLUCINATIONS: Do not invent any new work experience details, degrees, or facts unless explicitly requested by the user's editing instruction.
+`;
 
-Original Resume Text:
-"""
-${resumeText}
-"""
-
-Target Job Description:
-"""
-${jobDescription}
-"""
-
-${customInstructions ? `Custom Tweaking Instructions (Adhere to this request as well): \n"""\n${customInstructions}\n"""` : ''}
-
-Output the resume data strictly conforming to the specified JSON schema.`;
-
+    console.log('[REFINE DEBUG] Input JSON length:', JSON.stringify(tailoredResume).length);
     const result = await model.generateContent(systemPrompt);
     const responseText = result.response.text();
     
-    // Parse to verify JSON structure defensively before returning
+    console.log('[REFINE DEBUG] Response text length:', responseText.length);
+    console.log('[REFINE DEBUG] End of response text:', responseText.substring(Math.max(0, responseText.length - 300)));
+
     let cleanText = responseText.trim();
     if (cleanText.startsWith('```json')) {
       cleanText = cleanText.substring(7);
@@ -173,9 +150,9 @@ Output the resume data strictly conforming to the specified JSON schema.`;
 
     return res.status(200).json(parsedData);
   } catch (error) {
-    console.error('Gemini tailoring error:', error);
+    console.error('Gemini refinement error:', error);
     return res.status(500).json({
-      error: 'AI Tailoring Failed',
+      error: 'AI Refinement Failed',
       details: error.message
     });
   }
