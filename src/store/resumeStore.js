@@ -96,14 +96,27 @@ const setTailoredResume = (data) => {
   state.tailoredResume.summary = data.summary || ''
 
   if (Array.isArray(data.skills)) {
-    state.tailoredResume.skills = [
-      { category: 'Skills', values: data.skills }
-    ]
+    // Check if the array contains structured category objects: [{ category, values }]
+    const isStructured = data.skills.length > 0 && 
+                         typeof data.skills[0] === 'object' && 
+                         data.skills[0] !== null &&
+                         'category' in data.skills[0];
+                         
+    if (isStructured) {
+      state.tailoredResume.skills = data.skills.map(s => ({
+        category: s.category || '',
+        values: Array.isArray(s.values) ? s.values : []
+      }));
+    } else {
+      state.tailoredResume.skills = [
+        { category: 'Skills', values: data.skills }
+      ];
+    }
   } else if (typeof data.skills === 'object' && data.skills !== null) {
     state.tailoredResume.skills = Object.entries(data.skills).map(([category, values]) => ({
       category,
       values: Array.isArray(values) ? values : [values]
-    }))
+    }));
   } else {
     state.tailoredResume.skills = []
   }

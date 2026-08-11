@@ -159,6 +159,7 @@ const formatUrl = (url) => {
 .preview-page-container {
   display: flex;
   justify-content: center;
+  align-items: flex-start;
   width: 100%;
   overflow-y: auto;
   padding: 20px;
