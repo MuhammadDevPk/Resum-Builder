@@ -112,7 +112,7 @@ h1, h2, h3, h4, h5, h6 {
     font-family: 'Inter', sans-serif !important;
     font-size: 10pt !important;
     line-height: 1.4 !important;
-    margin: 0 !important;
+    margin: 15mm 15mm !important; /* Restores clean page margins on every page break */
     padding: 0 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
@@ -143,7 +143,7 @@ h1, h2, h3, h4, h5, h6 {
   /* Document margins definition */
   @page {
     size: letter portrait;
-    margin: 15mm 15mm 15mm 15mm;
+    margin: 0 !important; /* Hides default browser print artifacts (localhost URL, dates, page numbers) */
   }
 
   /* Prevent section splitting */
