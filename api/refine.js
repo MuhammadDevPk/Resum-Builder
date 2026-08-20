@@ -21,139 +21,91 @@ export default async function handler(req, res) {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    
+
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.5-flash-lite',
       generationConfig: {
         temperature: 0.1,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'OBJECT',
-          properties: {
-            personal: {
-              type: 'OBJECT',
-              properties: {
-                name: { type: 'STRING' },
-                email: { type: 'STRING' },
-                phone: { type: 'STRING' },
-                website: { type: 'STRING' },
-                github: { type: 'STRING' },
-                linkedin: { type: 'STRING' },
-                location: { type: 'STRING' }
-              },
-              required: ['name', 'email', 'phone']
-            },
-            summary: { type: 'STRING' },
-            skills: {
-              type: 'ARRAY',
-              items: {
-                type: 'OBJECT',
-                properties: {
-                  category: { type: 'STRING' },
-                  values: {
-                    type: 'ARRAY',
-                    items: { type: 'STRING' }
-                  }
-                },
-                required: ['category', 'values']
-              }
-            },
-            experience: {
-              type: 'ARRAY',
-              items: {
-                type: 'OBJECT',
-                properties: {
-                  role: { type: 'STRING' },
-                  company: { type: 'STRING' },
-                  duration: { type: 'STRING' },
-                  bullets: {
-                    type: 'ARRAY',
-                    items: { type: 'STRING' }
-                  }
-                },
-                required: ['role', 'company', 'duration', 'bullets']
-              }
-            },
-            projects: {
-              type: 'ARRAY',
-              items: {
-                type: 'OBJECT',
-                properties: {
-                  name: { type: 'STRING' },
-                  technologies: {
-                    type: 'ARRAY',
-                    items: { type: 'STRING' }
-                  },
-                  duration: { type: 'STRING' },
-                  description: { type: 'STRING' },
-                  bullets: {
-                    type: 'ARRAY',
-                    items: { type: 'STRING' }
-                  }
-                },
-                required: ['name', 'technologies', 'duration', 'bullets']
-              }
-            },
-            education: {
-              type: 'ARRAY',
-              items: {
-                type: 'OBJECT',
-                properties: {
-                  degree: { type: 'STRING' },
-                  school: { type: 'STRING' },
-                  duration: { type: 'STRING' }
-                },
-                required: ['degree', 'school', 'duration']
-              }
-            }
-          },
-          required: ['personal', 'summary', 'skills', 'experience', 'projects', 'education']
-        }
+        // NOTE: No responseMimeType — constrained JSON mode causes truncation on lite models.
+        // We parse JSON manually from the raw text response instead.
       }
     });
 
-    const systemPrompt = `You are a seasoned Resume Editor and Technical Recruiter.
-Your objective is to modify the candidate's existing tailored resume JSON structure according to the user's specific editing instructions.
+    // Use compact JSON (not pretty-printed) to save input tokens
+    const resumeJson = JSON.stringify(tailoredResume);
 
-CURRENT TAILORED RESUME JSON:
-${JSON.stringify(tailoredResume, null, 2)}
+    const numExperiences = tailoredResume.experience?.length || 0;
+    const numProjects = tailoredResume.projects?.length || 0;
 
-USER EDITING INSTRUCTION:
-"${prompt}"
+    const systemPrompt = `You are a professional Resume Editor. Your task is to update a resume JSON based on the user's instruction.
 
-CRITICAL RULES:
-1. STRICT SCHEMATIC INTEGRITY: Output ONLY the updated resume data, strictly conforming to the specified JSON schema. Do not change the JSON structure or keys.
-2. PRESERVE UNTOUCHED CONTENT: Keep all sections, bullets, and details that are not affected by the user's instruction exactly as they were in the original JSON.
-3. FOLLOW INSTRUCTIONS PRECISELY: Apply the user's edits accurately. For example, if the user asks to restructure or format certain bullets (like grouping projects under experience), update those bullets accordingly. If they ask to add/remove a skill, rewrite a summary, or rephrase a bullet, apply it precisely.
-4. NO HALLUCINATIONS: Do not invent any new work experience details, degrees, or facts unless explicitly requested by the user's editing instruction.
-`;
+CURRENT RESUME JSON:
+${resumeJson}
 
-    console.log('[REFINE DEBUG] Input JSON length:', JSON.stringify(tailoredResume).length);
+USER INSTRUCTION:
+${prompt}
+
+OUTPUT RULES (follow strictly):
+- Output ONLY a single valid JSON object. No markdown, no explanation, no code fences.
+- The JSON must have exactly these top-level keys: personal, summary, skills, experience, projects, education.
+- PRESERVE all sections unchanged unless the instruction explicitly targets them.
+- UNIQUE ENTRIES ONLY: Output each experience exactly once (there are ${numExperiences} in the input). Output each project exactly once (there are ${numProjects} in the input, plus any new ones the user asks to add). Never repeat or duplicate items.
+- If adding a new project: append it to the projects array.
+- If updating an experience's bullets: only change that company's bullets, leave all other experience entries identical.
+- NEVER output any text outside the JSON object. Start your response with { and end with }.`;
+
+    console.log(`[REFINE] Calling gemini-3.5-flash-lite | resume: ${resumeJson.length} chars | prompt: ${prompt.length} chars`);
+
     const result = await model.generateContent(systemPrompt);
+    const candidate = result.response.candidates?.[0];
+    const finishReason = candidate?.finishReason;
     const responseText = result.response.text();
-    
-    console.log('[REFINE DEBUG] Response text length:', responseText.length);
-    console.log('[REFINE DEBUG] End of response text:', responseText.substring(Math.max(0, responseText.length - 300)));
 
-    let cleanText = responseText.trim();
-    if (cleanText.startsWith('```json')) {
-      cleanText = cleanText.substring(7);
-    } else if (cleanText.startsWith('```')) {
-      cleanText = cleanText.substring(3);
-    }
-    if (cleanText.endsWith('```')) {
-      cleanText = cleanText.substring(0, cleanText.length - 3);
-    }
-    cleanText = cleanText.trim();
-    
-    const parsedData = JSON.parse(cleanText);
+    console.log(`[REFINE] finishReason: ${finishReason} | response length: ${responseText.length} chars`);
 
-    return res.status(200).json(parsedData);
+    // If the model stopped because it hit the token limit, the JSON will be truncated.
+    if (finishReason === 'MAX_TOKENS') {
+      console.error('[REFINE] Model hit MAX_TOKENS — response is incomplete JSON. Prompt may be too complex.');
+      if (!res.headersSent) {
+        return res.status(500).json({
+          error: 'AI Refinement Failed',
+          details: 'The AI response was too long and got cut off. Try breaking your request into smaller edits.'
+        });
+      }
+      return;
+    }
+
+    // Extract the JSON object from the response (handles cases where the model
+    // accidentally wraps its output in markdown fences or adds surrounding text)
+    let jsonText = responseText.trim();
+
+    // Strip markdown code fences if present
+    const fenceMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) {
+      jsonText = fenceMatch[1].trim();
+    }
+
+    // Find the outermost JSON object (from first { to last })
+    const firstBrace = jsonText.indexOf('{');
+    const lastBrace = jsonText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+    }
+
+    const parsedData = JSON.parse(jsonText);
+
+    console.log(`[REFINE] Success — experiences: ${parsedData.experience?.length}, projects: ${parsedData.projects?.length}`);
+
+    if (!res.headersSent) {
+      return res.status(200).json(parsedData);
+    }
   } catch (error) {
-    console.error('Gemini refinement error:', error);
-    return res.status(500).json({
-      error: 'AI Refinement Failed',
-      details: error.message
-    });
+    console.error('[REFINE] Error:', error.message);
+    if (!res.headersSent) {
+      return res.status(500).json({
+        error: 'AI Refinement Failed',
+        details: error.message
+      });
+    }
   }
 }
